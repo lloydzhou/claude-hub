@@ -1,0 +1,20 @@
+{
+  "name": "claude-workspace",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build:web": "vite build",
+    "dev:web": "vite",
+    "cli": "bun src/entrypoints/cli.tsx"
+  },
+  "devDependencies": {
+    "vite": "^6.1.0"
+  },
+  "dependencies": {
+    "ink": "^6.0.1",
+    "highlight.js": "^11.11.1",
+    "marked": "^15.0.12",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4"
+  }
+}

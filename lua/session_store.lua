@@ -186,6 +186,10 @@ function _M.list()
 
     keepalive(red)
 
+    if #sessions == 0 then
+        return {}
+    end
+
     table.sort(sessions, function(a, b)
         local at = tonumber(a.created_at or 0) or 0
         local bt = tonumber(b.created_at or 0) or 0

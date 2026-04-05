@@ -29,14 +29,17 @@ services:
     volumes:
       # Mount host Claude settings directly into the non-root user's home.
       - ${HOME}/.claude/settings.json:/home/claude/.claude/settings.json:ro
-      # Persist app state across container restarts.
+      # Persist Claude session JSONL history across container restarts.
+      - ${HOME}/.claude/projects:/home/claude/.claude/projects
+      # Persist app working directories across container restarts.
       - ./projects:/app/projects
     command:
       - sh
       - -lc
       - |
         set -e
-        mkdir -p /home/claude/.claude
+        mkdir -p /home/claude/.claude/projects
         chown -R claude:claude /app/projects
+        chown -R claude:claude /home/claude/.claude/projects
         exec /usr/local/openresty/bin/openresty -p /app/ -c conf/nginx.conf
     restart: unless-stopped

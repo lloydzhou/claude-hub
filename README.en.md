@@ -114,11 +114,13 @@ The repository includes `docker-compose.yml` with three host paths by default:
 
 - `./projects:/app/projects`
 - `${HOME}/.claude/settings.json:/home/claude/.claude/settings.json:ro`
+- `${HOME}/.claude/projects:/home/claude/.claude/projects`
 - `./redis-data:/data`
 
 In practice:
 
 - `projects` stores session-specific working directories
+- `${HOME}/.claude/projects` stores Claude's own session JSONL history so `--resume` keeps working across container restarts
 - `${HOME}/.claude/settings.json` is mounted directly as Claude configuration
 - `redis-data` persists Redis data
 - nginx logs go to container stdout / stderr instead of a separate host mount

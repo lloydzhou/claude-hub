@@ -242,7 +242,7 @@ RUN npm install -g --no-fund --no-audit @anthropic-ai/claude-code
 # ── Runtime user ──
 RUN groupadd --system claude \
     && useradd --system --create-home --home-dir /home/claude --gid claude claude \
-    && mkdir -p /home/claude/.claude /app/projects /app/logs \
+    && mkdir -p /home/claude/.claude/projects /app/projects /app/logs \
     && chown -R claude:claude /home/claude /app
 
 # ── App files ──

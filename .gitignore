@@ -2,3 +2,4 @@
 redis-data/
 logs/*.log
 logs/*.pid
+node_modules/

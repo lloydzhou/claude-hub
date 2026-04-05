@@ -1,6 +1,7 @@
-window.ClaudeWorkspaceReact = true;
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { createRoot } from 'react-dom/client';
 
-const { useEffect, useMemo, useRef, useState } = React;
+window.ClaudeWorkspaceReact = true;
 
 function useWorkspaceSnapshot() {
   const read = () => (window.ClaudeWorkspaceStore ? window.ClaudeWorkspaceStore.store.get() : null);
@@ -448,4 +449,4 @@ function AppShell() {
   );
 }
 
-ReactDOM.createRoot(document.getElementById('app')).render(<AppShell />);
+createRoot(document.getElementById('app')).render(<AppShell />);
