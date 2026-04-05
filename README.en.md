@@ -16,26 +16,28 @@ The current implementation is intentionally CGI-like:
 flowchart LR
   UI[Browser UI]
   TUI[claude_remote TUI]
-  OR[OpenResty]
+  subgraph OR[OpenResty server :8080]
+    LUA[Lua router]
+    NCHAN[Nchan module]
+  end
   REDIS[(Redis)]
   SHM[(ngx.shared.session_locks)]
-  NCHAN[Nchan]
   CLAUDE[claude -p]
 
-  UI -->|GET /api/sessions| OR
-  UI -->|POST /api/sessions| OR
-  UI -->|POST /pub/:id| OR
+  UI -->|GET /api/sessions| LUA
+  UI -->|POST /api/sessions| LUA
+  UI -->|POST /pub/:id| LUA
   UI <-->|WS /sub/:id| NCHAN
 
-  TUI -->|GET /api/sessions| OR
-  TUI -->|GET /sub/:id| NCHAN
-  TUI -->|POST /pub/:id| OR
+  TUI -->|GET /api/sessions| LUA
+  TUI -->|POST /pub/:id| LUA
+  TUI <-->|WS /sub/:id| NCHAN
 
-  OR -->|session lock| SHM
-  OR -->|session metadata| REDIS
-  OR -->|schedule timer / spawn one turn| CLAUDE
-  CLAUDE -->|stream-json stdout / stderr| OR
-  OR -->|publish raw events| NCHAN
+  LUA -->|session lock| SHM
+  LUA -->|session metadata| REDIS
+  LUA -->|schedule timer / spawn one turn| CLAUDE
+  CLAUDE -->|stream-json stdout / stderr| LUA
+  LUA -->|publish raw events| NCHAN
   NCHAN <-->|persist history| REDIS
 ```
 
@@ -48,7 +50,7 @@ flowchart LR
 5. OpenResty schedules a timer callback, which launches one Claude turn outside the request lifecycle.
 6. Claude emits raw `stream-json` events.
 7. OpenResty forwards those events to Nchan unchanged.
-8. The browser receives the raw `stream-json` stream from the subscribed session.
+8. The browser or `claude_remote` TUI receives the raw `stream-json` stream from the subscribed session.
 
 ## Why This Shape
 

@@ -207,7 +207,7 @@ local function publish_to_session(session_id, payload)
     local sock = ngx.socket.tcp()
     sock:settimeouts(1000, 1000, 1000)
 
-    local ok, err = sock:connect("127.0.0.1", 8081)
+    local ok, err = sock:connect("127.0.0.1", 8080)
     if not ok then
         ngx.log(ngx.ERR, "nchan publish connect failed session=", session_id,
                 " err=", err)
@@ -215,8 +215,8 @@ local function publish_to_session(session_id, payload)
     end
 
     local req = table.concat({
-        "POST /pub/", session_id, " HTTP/1.1\r\n",
-        "Host: 127.0.0.1:8081\r\n",
+        "POST /nchan/pub/", session_id, " HTTP/1.1\r\n",
+        "Host: 127.0.0.1:8080\r\n",
         "Content-Type: application/json\r\n",
         "Content-Length: ", #payload, "\r\n",
         "Connection: close\r\n\r\n",

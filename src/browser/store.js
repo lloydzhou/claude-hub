@@ -73,6 +73,13 @@ function normalizeTimestamp(value) {
   if (value == null || value === '') {
     return nowIso();
   }
+  if (typeof value === 'string' && /^\d+:\d+$/.test(value)) {
+    const [seconds] = value.split(':', 1);
+    const ts = Number(seconds);
+    if (Number.isFinite(ts)) {
+      return new Date(ts * 1000).toISOString();
+    }
+  }
   if (typeof value === 'number' && Number.isFinite(value)) {
     return new Date(value < 1e12 ? value * 1000 : value).toISOString();
   }
@@ -80,6 +87,13 @@ function normalizeTimestamp(value) {
     return value.toISOString();
   }
   if (typeof value === 'string') {
+    if (/^\d+:\d+$/.test(value)) {
+      const [seconds] = value.split(':', 1);
+      const ts = Number(seconds);
+      if (Number.isFinite(ts)) {
+        return new Date(ts * 1000).toISOString();
+      }
+    }
     const parsed = new Date(value);
     if (!Number.isNaN(parsed.getTime())) {
       return parsed.toISOString();
@@ -691,7 +705,11 @@ function ingestIncomingMessages(sessionId, parsedMessages) {
       timestamp: nowIso(),
     });
 
-    const msg = normalizeIncoming(payload);
+    const msg = normalizeIncoming(
+      meta && meta.id
+        ? { ...payload, message_id: meta.id, timestamp: meta.id }
+        : payload,
+    );
     next.push(msg);
   }
 
@@ -966,7 +984,8 @@ function normalizeIncoming(msg) {
     type: msg.type || 'assistant',
     subtype: msg.subtype,
     content: msg.content ?? msg.error ?? '',
-    timestamp: normalizeTimestamp(msg.timestamp),
+    message_id: msg.message_id || msg.id || '',
+    timestamp: normalizeTimestamp(msg.message_id || msg.id || msg.timestamp),
     session_id: msg.session_id,
     pid: msg.pid,
     reason: msg.reason,

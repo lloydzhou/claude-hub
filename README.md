@@ -16,26 +16,28 @@ Claude Workspace 是一个基于 OpenResty + Nchan 的会话式 Claude 工作区
 flowchart LR
   UI[Browser UI]
   TUI[claude_remote TUI]
-  OR[OpenResty]
+  subgraph OR[OpenResty server :8080]
+    LUA[Lua router]
+    NCHAN[Nchan module]
+  end
   REDIS[(Redis)]
   SHM[(ngx.shared.session_locks)]
-  NCHAN[Nchan]
   CLAUDE[claude -p]
 
-  UI -->|GET /api/sessions| OR
-  UI -->|POST /api/sessions| OR
-  UI -->|POST /pub/:id| OR
+  UI -->|GET /api/sessions| LUA
+  UI -->|POST /api/sessions| LUA
+  UI -->|POST /pub/:id| LUA
   UI <-->|WS /sub/:id| NCHAN
 
-  TUI -->|GET /api/sessions| OR
-  TUI -->|GET /sub/:id| NCHAN
-  TUI -->|POST /pub/:id| OR
+  TUI -->|GET /api/sessions| LUA
+  TUI -->|POST /pub/:id| LUA
+  TUI <-->|WS /sub/:id| NCHAN
 
-  OR -->|session lock| SHM
-  OR -->|session metadata| REDIS
-  OR -->|schedule timer / spawn one turn| CLAUDE
-  CLAUDE -->|stream-json stdout / stderr| OR
-  OR -->|publish raw events| NCHAN
+  LUA -->|session lock| SHM
+  LUA -->|session metadata| REDIS
+  LUA -->|schedule timer / spawn one turn| CLAUDE
+  CLAUDE -->|stream-json stdout / stderr| LUA
+  LUA -->|publish raw events| NCHAN
   NCHAN <-->|persist history| REDIS
 ```
 
@@ -48,7 +50,7 @@ flowchart LR
 5. OpenResty 用 timer 回调启动一次 Claude turn，脱离请求生命周期。
 6. Claude 使用 `stream-json` 输出原始事件。
 7. OpenResty 原样转发这些事件到 Nchan。
-8. 浏览器从订阅的 session 流里收到原始 `stream-json`。
+8. 浏览器或 `claude_remote` TUI 从订阅的 session 流里收到原始 `stream-json`。
 
 ## 为什么这样设计
 

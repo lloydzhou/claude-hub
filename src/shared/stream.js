@@ -4,13 +4,27 @@ function nowIso() {
   return new Date().toISOString();
 }
 
+function isNchanMessageId(value) {
+  return typeof value === 'string' && /^\d+:\d+$/.test(value);
+}
+
 function normalizeTimestamp(value) {
   if (value == null || value === '') return nowIso();
+  if (isNchanMessageId(value)) {
+    const [seconds] = value.split(':', 1);
+    const ts = Number(seconds);
+    if (Number.isFinite(ts)) return new Date(ts * 1000).toISOString();
+  }
   if (typeof value === 'number' && Number.isFinite(value)) {
     return new Date(value < 1e12 ? value * 1000 : value).toISOString();
   }
   if (value instanceof Date) return value.toISOString();
   if (typeof value === 'string') {
+    if (isNchanMessageId(value)) {
+      const [seconds] = value.split(':', 1);
+      const ts = Number(seconds);
+      if (Number.isFinite(ts)) return new Date(ts * 1000).toISOString();
+    }
     const parsed = new Date(value);
     if (!Number.isNaN(parsed.getTime())) return parsed.toISOString();
     const asNumber = Number(value);
@@ -61,6 +75,7 @@ function normalizeAction(payload, source = 'remote') {
     session_id: payload.session_id,
     pid: payload.pid,
     is_error: payload.is_error,
+    message_id: payload.message_id,
     timestamp: normalizeTimestamp(payload.timestamp),
     source,
     raw: payload,

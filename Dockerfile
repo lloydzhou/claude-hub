@@ -8,14 +8,21 @@ ARG RESTY_IMAGE_TAG="bookworm-slim"
 FROM node:22-bookworm-slim AS browser-builder
 
 WORKDIR /app
+ENV PNPM_HOME=/pnpm
+ENV PATH=$PNPM_HOME:$PATH
+ENV NPM_CONFIG_REGISTRY=https://registry.npmmirror.com
 
 COPY package.json /app/package.json
+
+RUN corepack enable \
+    && corepack prepare pnpm@9.15.4 --activate \
+    && pnpm install --no-frozen-lockfile --registry=https://registry.npmmirror.com
+
 COPY index.html /app/index.html
 COPY vite.config.cjs /app/vite.config.cjs
 COPY src/ /app/src/
 
-RUN npm install --no-fund --no-audit \
-    && npm run build:web
+RUN pnpm run build:web
 
 FROM ${RESTY_IMAGE_BASE}:${RESTY_IMAGE_TAG}
 

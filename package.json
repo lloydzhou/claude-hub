@@ -2,6 +2,7 @@
   "name": "claude-workspace",
   "private": true,
   "type": "module",
+  "packageManager": "pnpm@9.15.4",
   "scripts": {
     "build:web": "vite build",
     "dev:web": "vite",
