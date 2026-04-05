@@ -15,6 +15,7 @@ The current implementation is intentionally CGI-like:
 ```mermaid
 flowchart LR
   UI[Browser UI]
+  TUI[claude_remote TUI]
   OR[OpenResty]
   REDIS[(Redis)]
   SHM[(ngx.shared.session_locks)]
@@ -25,6 +26,10 @@ flowchart LR
   UI -->|POST /api/sessions| OR
   UI -->|POST /pub/:id| OR
   UI <-->|WS /sub/:id| NCHAN
+
+  TUI -->|GET /api/sessions| OR
+  TUI -->|GET /sub/:id| NCHAN
+  TUI -->|POST /pub/:id| OR
 
   OR -->|session lock| SHM
   OR -->|session metadata| REDIS
@@ -37,8 +42,8 @@ flowchart LR
 ## Request Flow
 
 1. The browser creates or selects a session.
-2. The browser keeps a WebSocket subscription open to `/sub/:id`.
-3. When the user sends a message, the browser POSTs to `/pub/:id`.
+2. The browser or `claude_remote` TUI keeps a subscription open to `/sub/:id`.
+3. When the user sends a message, the browser or TUI POSTs to `/pub/:id`.
 4. OpenResty acquires a lock for that `session_id`.
 5. OpenResty schedules a timer callback, which launches one Claude turn outside the request lifecycle.
 6. Claude emits raw `stream-json` events.

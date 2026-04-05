@@ -15,6 +15,7 @@ Claude Workspace 是一个基于 OpenResty + Nchan 的会话式 Claude 工作区
 ```mermaid
 flowchart LR
   UI[Browser UI]
+  TUI[claude_remote TUI]
   OR[OpenResty]
   REDIS[(Redis)]
   SHM[(ngx.shared.session_locks)]
@@ -25,6 +26,10 @@ flowchart LR
   UI -->|POST /api/sessions| OR
   UI -->|POST /pub/:id| OR
   UI <-->|WS /sub/:id| NCHAN
+
+  TUI -->|GET /api/sessions| OR
+  TUI -->|GET /sub/:id| NCHAN
+  TUI -->|POST /pub/:id| OR
 
   OR -->|session lock| SHM
   OR -->|session metadata| REDIS
@@ -37,8 +42,8 @@ flowchart LR
 ## 请求流程
 
 1. 浏览器创建或选择一个会话。
-2. 浏览器保持对 `/sub/:id` 的 WebSocket 订阅。
-3. 用户发送消息时，浏览器 `POST /pub/:id`。
+2. 浏览器或 `claude_remote` TUI 保持对 `/sub/:id` 的订阅。
+3. 用户发送消息时，浏览器或 TUI `POST /pub/:id`。
 4. OpenResty 为该 `session_id` 申请锁。
 5. OpenResty 用 timer 回调启动一次 Claude turn，脱离请求生命周期。
 6. Claude 使用 `stream-json` 输出原始事件。
