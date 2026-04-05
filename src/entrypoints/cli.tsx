@@ -3,6 +3,10 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { render, Box, Text, useApp, useInput } from 'ink';
 import { createRemoteSessionClient } from '../runtime/remote-session.js';
 
+function isUuid(value) {
+  return typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
 function parseArgs(argv) {
   const args = [...argv];
   const result = { _: [] };
@@ -201,6 +205,20 @@ async function main() {
 
   if (!argv.sessionId) {
     process.stderr.write('Missing --session-id. Try `claude_remote list` first.\n');
+    process.exitCode = 1;
+    return;
+  }
+
+  if (!isUuid(argv.sessionId)) {
+    process.stderr.write(`Invalid --session-id: ${argv.sessionId}\n`);
+    process.exitCode = 1;
+    return;
+  }
+
+  const preflightClient = createRemoteSessionClient({ apiBase: baseUrl, sessionId: argv.sessionId });
+  const session = await preflightClient.loadSession();
+  if (!session) {
+    process.stderr.write(`Session not found: ${argv.sessionId}\n`);
     process.exitCode = 1;
     return;
   }

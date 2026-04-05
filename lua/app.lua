@@ -23,7 +23,7 @@ local function build_router()
         utils.json_response({
             session_id = id,
             subscribe_url = "/sub/" .. id,
-            publish_url = "/pub/" .. id,
+            publish_url = "/api/sessions/" .. id .. "/turn",
             info = info
         }, 201)
     end)
@@ -57,9 +57,44 @@ local function build_router()
         utils.json_response({ status = "deleted", session_id = params.id })
     end)
 
+    local function nchan_auth_handler()
+        local headers = ngx.req.get_headers()
+        local session_id = headers["X-Channel-Id"] or headers["x-channel-id"]
+        if not session_id or session_id == "" then
+            utils.error_response("missing channel id", 400)
+            return
+        end
+        if not utils.is_uuid(session_id) then
+            utils.error_response("invalid channel id", 403)
+            return
+        end
+
+        local info = pm.get(session_id)
+        if not info then
+            utils.error_response("session not found", 403)
+            return
+        end
+
+        ngx.status = ngx.HTTP_OK
+        ngx.say("ok")
+        return ngx.exit(ngx.HTTP_OK)
+    end
+
+    r:get("/api/nchan/auth", function()
+        nchan_auth_handler()
+    end)
+
+    r:post("/api/nchan/auth", function()
+        nchan_auth_handler()
+    end)
+
     -- --- Publish one Claude turn ---
-    r:post("/pub/:id", function(params)
+    r:post("/api/sessions/:id/turn", function(params)
         local session_id = params.id
+        if not utils.is_uuid(session_id) then
+            utils.error_response("invalid session id", 400)
+            return
+        end
         local info = pm.get(session_id)
         if not info then
             utils.error_response("session not found", 404)

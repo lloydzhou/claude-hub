@@ -299,8 +299,8 @@ function createRemoteSessionClient({ apiBase = '', sessionId = null } = {}) {
     setSending(true);
     try {
       const msg = { type: 'turn_request', content: clean };
-      pushConsole({ kind: 'request', source: 'cli', title: 'pub request', data: msg, timestamp: nowIso() });
-      await api(`/pub/${sessionId}`, { method: 'POST', body: JSON.stringify(msg) });
+      pushConsole({ kind: 'request', source: 'cli', title: 'turn request', data: msg, timestamp: nowIso() });
+      await api(`/api/sessions/${sessionId}/turn`, { method: 'POST', body: JSON.stringify(msg) });
       setSessionPatch({ status: 'running', locked: true });
       setBusy(true);
       return true;
@@ -310,7 +310,7 @@ function createRemoteSessionClient({ apiBase = '', sessionId = null } = {}) {
         pushConsole({ kind: 'queue', source: 'cli', title: 'busy -> queue', data: { text: clean, status: err.status, message: err.message }, timestamp: nowIso() });
         return false;
       }
-      pushConsole({ kind: 'error', source: 'cli', title: 'pub failed', data: { text: clean, status: err.status, message: err.message }, timestamp: nowIso() });
+      pushConsole({ kind: 'error', source: 'cli', title: 'turn failed', data: { text: clean, status: err.status, message: err.message }, timestamp: nowIso() });
       return false;
     } finally {
       setSending(false);

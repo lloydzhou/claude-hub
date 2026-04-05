@@ -1257,10 +1257,10 @@ async function dispatchTurn(sessionId, text) {
     pushConsole(sessionId, {
       kind: 'request',
       source: 'browser',
-      title: 'pub request',
+      title: 'turn request',
       data: msg,
     });
-    await api(`/pub/${sessionId}`, {
+    await api(`/api/sessions/${sessionId}/turn`, {
       method: 'POST',
       body: JSON.stringify(msg),
     });
@@ -1281,7 +1281,7 @@ async function dispatchTurn(sessionId, text) {
     pushConsole(sessionId, {
       kind: 'error',
       source: 'browser',
-      title: 'pub failed',
+      title: 'turn failed',
       data: { text, status: err.status, message: err.message },
     });
     return false;

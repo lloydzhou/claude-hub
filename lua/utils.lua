@@ -66,6 +66,16 @@ function _M.uuid()
     end)
 end
 
+function _M.is_uuid(value)
+    if type(value) ~= "string" then
+        return false
+    end
+    local ok, matched = pcall(function()
+        return ngx.re.match(value, [[^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$]], "ijo")
+    end)
+    return ok and matched ~= nil
+end
+
 -- Read request body as string
 function _M.read_body()
     ngx.req.read_body()

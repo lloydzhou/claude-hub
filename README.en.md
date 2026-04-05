@@ -26,11 +26,11 @@ flowchart LR
 
   UI -->|GET /api/sessions| LUA
   UI -->|POST /api/sessions| LUA
-  UI -->|POST /pub/:id| LUA
+  UI -->|POST /api/sessions/:id/turn| LUA
   UI <-->|WS /sub/:id| NCHAN
 
   TUI -->|GET /api/sessions| LUA
-  TUI -->|POST /pub/:id| LUA
+  TUI -->|POST /api/sessions/:id/turn| LUA
   TUI <-->|WS /sub/:id| NCHAN
 
   LUA -->|session lock| SHM
@@ -45,7 +45,7 @@ flowchart LR
 
 1. The browser creates or selects a session.
 2. The browser or `claude_remote` TUI keeps a subscription open to `/sub/:id`.
-3. When the user sends a message, the browser or TUI POSTs to `/pub/:id`.
+3. When the user sends a message, the browser or TUI POSTs to `/api/sessions/:id/turn`.
 4. OpenResty acquires a lock for that `session_id`.
 5. OpenResty schedules a timer callback, which launches one Claude turn outside the request lifecycle.
 6. Claude emits raw `stream-json` events.
@@ -68,7 +68,7 @@ The current model keeps responsibilities separate:
 The public concept is `session_id` only:
 
 - A session is created with a UUID `session_id`
-- `/pub/:id` and `/sub/:id` use the same UUID
+- `/api/sessions/:id/turn` and `/sub/:id` use the same UUID
 - The UI displays only `session_id`
 - Internally, there is no separate “channel” abstraction in the app code
 
@@ -94,7 +94,7 @@ Behavior:
 - `GET /api/sessions` lists sessions.
 - `GET /api/sessions/:id` returns session metadata.
 - `DELETE /api/sessions/:id` deletes an idle session record.
-- `POST /pub/:id` submits one Claude turn.
+- `POST /api/sessions/:id/turn` submits one Claude turn.
 - `GET /sub/:id` is the Nchan subscription endpoint.
 
 ## Runtime Details
