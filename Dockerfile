@@ -5,6 +5,18 @@
 ARG RESTY_IMAGE_BASE="debian"
 ARG RESTY_IMAGE_TAG="bookworm-slim"
 
+FROM node:22-bookworm-slim AS browser-builder
+
+WORKDIR /app
+
+COPY package.json /app/package.json
+COPY index.html /app/index.html
+COPY vite.config.cjs /app/vite.config.cjs
+COPY src/ /app/src/
+
+RUN npm install --no-fund --no-audit \
+    && npm run build:web
+
 FROM ${RESTY_IMAGE_BASE}:${RESTY_IMAGE_TAG}
 
 LABEL maintainer="Claude Workspace"
@@ -242,17 +254,17 @@ RUN npm install -g --no-fund --no-audit @anthropic-ai/claude-code
 # ── Runtime user ──
 RUN groupadd --system claude \
     && useradd --system --create-home --home-dir /home/claude --gid claude claude \
-    && mkdir -p /home/claude/.claude/projects /app/projects /app/logs \
+    && mkdir -p /home/claude/.claude/projects /app/projects /app/logs /app/html \
     && chown -R claude:claude /home/claude /app
 
 # ── App files ──
 WORKDIR /app
 COPY conf/nginx.conf /app/conf/nginx.conf
-COPY lua/           /app/lua/
-COPY html/          /app/html/
+COPY lua/ /app/lua/
+COPY --from=browser-builder /app/html/ /app/html/
 
 RUN mkdir -p /app/projects /app/logs \
-    && chown -R claude:claude /app/projects /app/logs
+    && chown -R claude:claude /app/projects /app/logs /app/html
 
 EXPOSE 8080
 

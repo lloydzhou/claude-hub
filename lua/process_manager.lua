@@ -35,6 +35,35 @@ local function build_env_vars()
     return env_vars
 end
 
+local function shell_quote(value)
+    return "'" .. tostring(value):gsub("'", "'\\''") .. "'"
+end
+
+local function shell_join(args)
+    local parts = {}
+    for _, arg in ipairs(args or {}) do
+        table.insert(parts, shell_quote(arg))
+    end
+    return table.concat(parts, " ")
+end
+
+local function ensure_session_repo(session_dir)
+    local git_dir = session_dir .. "/.git"
+    local probe = io.open(git_dir, "r")
+    if probe then
+        probe:close()
+        return true
+    end
+
+    local ok = os.execute("git -C " .. shell_quote(session_dir) .. " init -q >/dev/null 2>&1")
+    if ok ~= true and ok ~= 0 then
+        ngx.log(ngx.WARN, "failed to init git repo for session dir ", session_dir, ": ", tostring(ok))
+        return nil, "failed to init session repo"
+    end
+
+    return true
+end
+
 local function build_user_event_line(body, session_id)
     local payload = body
     if type(payload) ~= "table" then
@@ -298,7 +327,7 @@ local function stdout_reader(proc, session_id)
     return true
 end
 
-local function run_turn(session_id, body, project_dir)
+local function run_turn(session_id, body, session_dir)
     local env_vars = build_env_vars()
     local claude_bin = os.getenv("CLAUDE_BIN") or "claude"
     local turn_mode = session_turn_mode(session_id)
@@ -317,12 +346,13 @@ local function run_turn(session_id, body, project_dir)
         table.insert(proc_args, 3, _M.get(session_id).claude_session_id or session_id)
     end
 
+    local shell_cmd = "cd " .. shell_quote(session_dir) .. " && exec " .. shell_join(proc_args)
     ngx.log(ngx.INFO, "spawn turn(): claude_bin=", claude_bin,
             " session=", session_id, " mode=", turn_mode,
+            " cwd=", session_dir,
             " env_count=", #env_vars)
 
-    local proc, spawn_err = pipe.spawn(proc_args, {
-        cwd = project_dir,
+    local proc, spawn_err = pipe.spawn({"/bin/sh", "-lc", shell_cmd}, {
         merge_stderr = false,
         environ = env_vars,
     })
@@ -443,8 +473,12 @@ function _M.spawn(session_id, body)
     publish_user_event(session_id, body)
 
     local prefix = ngx.config.prefix()
-    local project_dir = prefix .. "projects/" .. session_id
-    os.execute("mkdir -p " .. project_dir)
+    local session_dir = os.getenv("CLAUDE_WORKSPACE_DIR") or (prefix .. "projects/" .. session_id)
+    os.execute("mkdir -p " .. session_dir)
+    local repo_ok, repo_err = ensure_session_repo(session_dir)
+    if not repo_ok then
+        return nil, repo_err or "failed to init session repo"
+    end
 
     upsert_session(session_id, {
         status = "running",
@@ -457,7 +491,7 @@ function _M.spawn(session_id, body)
             return
         end
         run_turn(sid, turn_body, cwd)
-    end, session_id, body, project_dir)
+    end, session_id, body, session_dir)
     if not ok then
         release_lock(session_id)
         upsert_session(session_id, {

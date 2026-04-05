@@ -2,7 +2,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { render, Box, Text, useApp, useInput } from 'ink';
 import { createRemoteSessionClient } from '../runtime/remote-session.js';
-import { formatShortId, formatStamp } from '../shared/stream.js';
 
 function parseArgs(argv) {
   const args = [...argv];
@@ -42,21 +41,30 @@ async function listSessions(baseUrl = '') {
   process.stdout.write('----------------  -------  -----  --------------------------------\n');
   for (const s of sessions) {
     const summary = s.last_user_text || s.last_result || (typeof s.turn_count === 'number' ? `${s.turn_count} turn${s.turn_count === 1 ? '' : 's'}` : '');
-    process.stdout.write(`${formatShortId(s.session_id).padEnd(16)}  ${(s.status || 'idle').padEnd(7)}  ${String(s.turn_count || 0).padEnd(5)}  ${String(summary).slice(0, 40)}\n`);
+    process.stdout.write(`${String(s.session_id || '').padEnd(36)}  ${(s.status || 'idle').padEnd(7)}  ${String(s.turn_count || 0).padEnd(5)}  ${String(summary).slice(0, 40)}\n`);
   }
 }
 
 function MessageLine({ message }) {
   const role = message.role || 'system';
-  const color = role === 'user' ? 'green' : role === 'assistant' ? 'cyan' : role === 'error' ? 'red' : 'gray';
+  const color = role === 'user' ? 'green' : role === 'assistant' ? 'white' : role === 'error' ? 'red' : 'gray';
+  const lines = String(message.content || '').trim().split('\n');
   return (
     <Box flexDirection="column" marginBottom={1}>
-      <Text color={color} bold>
-        {role.toUpperCase()} {message.pending ? '(pending)' : ''}
-      </Text>
-      <Text>
-        {String(message.content || '').trim() || '<empty>'}
-      </Text>
+      <Box>
+        <Text color={color}>
+          •
+        </Text>
+        {message.pending ? <Text color="yellow"> •</Text> : null}
+        <Text> </Text>
+        <Text>{lines[0] || '<empty>'}</Text>
+      </Box>
+      {lines.slice(1).map((line, idx) => (
+        <Box key={`${message.id}-${idx}`}>
+          <Text dimColor>  </Text>
+          <Text>{line}</Text>
+        </Box>
+      ))}
     </Box>
   );
 }
@@ -110,6 +118,11 @@ function SessionTui({ sessionId, baseUrl = '' }) {
   const session = client.getCurrentSummary() || { id: sessionId };
   const messages = state.messages || [];
   const queue = state.queue || [];
+  const summary = `session=${session.id}  status=${session.status || 'loading'}  connected=${state.connected ? 'yes' : 'no'}  busy=${state.busy ? 'yes' : 'no'}  queue=${queue.length}`;
+  const promptText = input.length ? input : 'Ask Claude...';
+  const showCursor = !!inputEnabled;
+  const columns = Math.max(process.stdout.columns || 80, 10);
+  const rule = '─'.repeat(columns - 1);
 
   return (
     <Box flexDirection="column">
@@ -121,21 +134,22 @@ function SessionTui({ sessionId, baseUrl = '' }) {
           onExit={exit}
         />
       ) : null}
+      <Box marginBottom={1}>
+        <Text color="yellow">claude_remote</Text>
+        <Text dimColor>  {summary}</Text>
+      </Box>
       <Box flexDirection="column" marginBottom={1}>
-        <Text color="yellow" bold>
-          claude_remote
-        </Text>
-        <Text>
-          session_id={session.id} status={session.status || 'loading'} connected={state.connected ? 'yes' : 'no'} busy={state.busy ? 'yes' : 'no'} queue={queue.length}
-        </Text>
+        {messages.length ? messages.map((m) => <MessageLine key={m.id} message={m} />) : <Text dimColor>• No transcript yet.</Text>}
       </Box>
-      <Box flexDirection="column" borderStyle="single" paddingX={1} marginBottom={1}>
-        <Text color="cyan" bold>Transcript</Text>
-        {messages.length ? messages.map((m) => <MessageLine key={m.id} message={m} />) : <Text dimColor>No transcript yet.</Text>}
-      </Box>
-      <Box borderStyle="single" paddingX={1}>
-        <Text color="green">&gt; </Text>
-        <Text>{input || 'Ask Claude... Enter to send, Ctrl+C to exit'}</Text>
+      <Box flexDirection="column" marginTop={0}>
+        <Text dimColor>{rule}</Text>
+        <Box>
+          <Text color="green">&gt; </Text>
+          <Text>{promptText}</Text>
+          {showCursor ? <Text color="green">█</Text> : null}
+        </Box>
+        <Text dimColor>{rule}</Text>
+        <Text dimColor>accept edits on (shift+tab to cycle)</Text>
       </Box>
       {!inputEnabled ? (
         <Text dimColor>
