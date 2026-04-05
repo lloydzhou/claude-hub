@@ -15,15 +15,11 @@ local function build_router()
     -- --- Session CRUD ---
     r:post("/api/sessions", function(params)
         local id = utils.uuid()
-        local info = {
-            session_id = id,
-            claude_initialized = false,
-            turn_count = 0,
-            status = "idle",
-            created_at = ngx.now()
-        }
-        local dict = ngx.shared.sessions
-        dict:set("session:" .. id, utils.json_encode(info))
+        local info, err = pm.create(id)
+        if not info then
+            utils.error_response("failed to create session: " .. (err or "unknown"), 500)
+            return
+        end
         utils.json_response({
             session_id = id,
             subscribe_url = "/sub/" .. id,
@@ -33,14 +29,19 @@ local function build_router()
     end)
 
     r:get("/api/sessions", function(params)
-        local sessions = pm.list()
+        local sessions, err = pm.list()
+        if not sessions then
+            utils.error_response("failed to list sessions: " .. (err or "unknown"), 500)
+            return
+        end
         utils.json_response({ sessions = sessions })
     end)
 
     r:get("/api/sessions/:id", function(params)
-        local info = pm.get(params.id)
+        local info, err = pm.get(params.id)
         if not info then
-            utils.error_response("session not found", 404)
+            local status = (err == "not found") and 404 or 500
+            utils.error_response("failed to load session: " .. (err or "unknown"), status)
             return
         end
         utils.json_response(info)

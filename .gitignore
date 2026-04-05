@@ -1,0 +1,4 @@
+.claude-state/
+redis-data/
+logs/*.log
+logs/*.pid

@@ -1,0 +1,42 @@
+services:
+  redis:
+    image: redis:7-bookworm
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --save
+      - "60"
+      - "1"
+    volumes:
+      - ./redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  claude-workspace:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: claude-workspace
+    ports:
+      - "8080:8080"
+    depends_on:
+      redis:
+        condition: service_healthy
+    volumes:
+      # Mount host Claude settings directly into the non-root user's home.
+      - ${HOME}/.claude/settings.json:/home/claude/.claude/settings.json:ro
+      # Persist app state across container restarts.
+      - ./projects:/app/projects
+    command:
+      - sh
+      - -lc
+      - |
+        set -e
+        mkdir -p /home/claude/.claude
+        chown -R claude:claude /app/projects
+        exec /usr/local/openresty/bin/openresty -p /app/ -c conf/nginx.conf
+    restart: unless-stopped

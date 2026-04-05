@@ -16,7 +16,8 @@ The current implementation is intentionally CGI-like:
 flowchart LR
   UI[Browser UI]
   OR[OpenResty]
-  SHM[(ngx.shared.sessions)]
+  REDIS[(Redis)]
+  SHM[(ngx.shared.session_locks)]
   NCHAN[Nchan]
   CLAUDE[claude -p]
 
@@ -26,9 +27,11 @@ flowchart LR
   UI <-->|WS /sub/:id| NCHAN
 
   OR -->|session lock| SHM
+  OR -->|session metadata| REDIS
   OR -->|schedule timer / spawn one turn| CLAUDE
   CLAUDE -->|stream-json stdout / stderr| OR
   OR -->|publish raw events| NCHAN
+  NCHAN <-->|persist history| REDIS
 ```
 
 ## Request Flow
@@ -105,18 +108,30 @@ The frontend is a terminal-like layout inspired by Claude TUI:
 - An Action Console that is collapsed by default
 - Auto-scroll to the latest message
 
+## Docker
+
+The repository includes `docker-compose.yml` with three host paths by default:
+
+- `./projects:/app/projects`
+- `${HOME}/.claude/settings.json:/home/claude/.claude/settings.json:ro`
+- `./redis-data:/data`
+
+In practice:
+
+- `projects` stores session-specific working directories
+- `${HOME}/.claude/settings.json` is mounted directly as Claude configuration
+- `redis-data` persists Redis data
+- nginx logs go to container stdout / stderr instead of a separate host mount
+
 ## Nchan Buffering
 
-For now, the app uses Nchan’s built-in in-memory buffering:
+The app now uses both Redis and Nchan's in-memory buffer:
 
-- The current session history can be replayed
-- Refreshing the page can restore the current session subscription
-
-Redis persistence is deferred to TODO.
+- Nchan handles the live message stream and local buffering
+- Redis stores persisted messages
+- Session metadata is also stored in Redis
 
 ## TODO
 
-- Persist Nchan session history into Redis
-- Rehydrate history from Redis on reconnect
 - Add a more complete browser retry policy for `409 session busy`
 - Continue tightening the UI toward Claude TUI

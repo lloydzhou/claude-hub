@@ -1,22 +1,26 @@
-# Dockerfile - alpine
-# https://github.com/openresty/docker-openresty
+# Dockerfile - Debian/bookworm
+# Based on OpenResty's official Linux support for Debian/Ubuntu.
+# See: https://openresty.org/en/deb-packages.html
 
-ARG RESTY_IMAGE_BASE="alpine"
-ARG RESTY_IMAGE_TAG="3.22.3"
+ARG RESTY_IMAGE_BASE="debian"
+ARG RESTY_IMAGE_TAG="bookworm-slim"
 
 FROM ${RESTY_IMAGE_BASE}:${RESTY_IMAGE_TAG}
 
-LABEL maintainer="Claude Cluster"
+LABEL maintainer="Claude Workspace"
 
-# ── Alpine mirrors (CN) ──
-RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.tuna.tsinghua.edu.cn/g' /etc/apk/repositories
+ENV DEBIAN_FRONTEND=noninteractive
+ENV HOME=/home/claude
+ENV USER=claude
+ENV LOGNAME=claude
+ENV CLAUDE_CONFIG_DIR=/home/claude/.claude
 
 # Docker Build Arguments
-ARG RESTY_IMAGE_BASE="alpine"
-ARG RESTY_IMAGE_TAG="3.22.3"
+ARG RESTY_IMAGE_BASE="debian"
+ARG RESTY_IMAGE_TAG="bookworm-slim"
 ARG RESTY_VERSION="1.29.2.3"
 
-# https://github.com/openresty/openresty-packaging/blob/master/alpine/openresty-openssl3/APKBUILD
+# OpenResty build knobs adapted from upstream packaging defaults.
 ARG RESTY_OPENSSL_VERSION="3.5.5"
 ARG RESTY_OPENSSL_PATCH_VERSION="3.5.5"
 ARG RESTY_OPENSSL_URL_BASE="https://github.com/openssl/openssl/releases/download/openssl-${RESTY_OPENSSL_VERSION}"
@@ -25,7 +29,7 @@ ARG RESTY_OPENSSL_BUILD_OPTIONS="enable-camellia enable-seed enable-rfc3779 enab
         enable-weak-ssl-ciphers enable-ssl3 enable-ssl3-method enable-md2 enable-ktls enable-fips \
         "
 
-# https://github.com/openresty/openresty-packaging/blob/master/alpine/openresty-pcre2/APKBUILD
+# OpenResty build knobs adapted from upstream packaging defaults.
 ARG RESTY_PCRE_VERSION="10.47"
 ARG RESTY_PCRE_SHA256="c08ae2388ef333e8403e670ad70c0a11f1eed021fd88308d7e02f596fcd9dc16"
 ARG RESTY_PCRE_BUILD_OPTIONS="--enable-jit --enable-pcre2grep-jit --disable-bsr-anycrlf --disable-coverage --disable-ebcdic --disable-fuzz-support \
@@ -36,8 +40,9 @@ ARG RESTY_PCRE_BUILD_OPTIONS="--enable-jit --enable-pcre2grep-jit --disable-bsr-
 
 ARG RESTY_J="10"
 ARG NCHAN_VERSION="1.3.8"
+ARG DEBIAN_MIRROR="http://mirrors.tuna.tsinghua.edu.cn"
 
-# https://github.com/openresty/openresty-packaging/blob/master/alpine/openresty/APKBUILD
+# OpenResty build knobs adapted from upstream packaging defaults.
 ARG RESTY_CONFIG_OPTIONS="\
     --with-compat \
     --without-http_rds_json_module \
@@ -118,29 +123,47 @@ LABEL resty_strip_binaries="${RESTY_STRIP_BINARIES}"
 LABEL resty_luajit_options="${RESTY_LUAJIT_OPTIONS}"
 LABEL resty_pcre_options="${RESTY_PCRE_OPTIONS}"
 
-RUN apk add --no-cache --virtual .build-deps \
-        build-base \
+RUN set -eux; \
+    rm -f /etc/apt/sources.list.d/debian.sources; \
+    printf '%s\n' \
+        "deb ${DEBIAN_MIRROR}/debian bookworm main contrib non-free non-free-firmware" \
+        "deb ${DEBIAN_MIRROR}/debian bookworm-updates main contrib non-free non-free-firmware" \
+        "deb ${DEBIAN_MIRROR}/debian-security bookworm-security main contrib non-free non-free-firmware" \
+        > /etc/apt/sources.list; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends \
         binutils \
+        build-essential \
+        ca-certificates \
         coreutils \
         curl \
-        gd-dev \
-        geoip-dev \
-        libxslt-dev \
-        linux-headers \
+        dirmngr \
+        git \
+        gnupg \
+        libgd-dev \
+        libgeoip-dev \
+        libperl-dev \
+        libpcre3-dev \
+        libreadline-dev \
+        libssl-dev \
+        libxslt1-dev \
         make \
-        perl-dev \
-        readline-dev \
-        zlib-dev \
-        ${RESTY_ADD_PACKAGE_BUILDDEPS} \
-    && apk add --no-cache \
-        gd \
-        geoip \
-        libgcc \
-        libxslt \
-        tzdata \
-        zlib \
-        ${RESTY_ADD_PACKAGE_RUNDEPS} \
-    && cd /tmp \
+        patch \
+        perl \
+        pkg-config \
+        wget \
+        xz-utils \
+        zlib1g-dev \
+        nodejs \
+        npm \
+        ${RESTY_ADD_PACKAGE_BUILDDEPS}; \
+    if [ -n "${RESTY_ADD_PACKAGE_RUNDEPS}" ]; then \
+        apt-get install -y --no-install-recommends ${RESTY_ADD_PACKAGE_RUNDEPS}; \
+    fi; \
+    rm -rf /var/lib/apt/lists/*; \
+    mkdir -p /var/run/openresty
+
+RUN cd /tmp \
     && if [ -n "${RESTY_EVAL_PRE_CONFIGURE}" ]; then eval $(echo ${RESTY_EVAL_PRE_CONFIGURE}); fi \
     && cd /tmp \
     && curl -fSL "${RESTY_OPENSSL_URL_BASE}/openssl-${RESTY_OPENSSL_VERSION}.tar.gz" -o openssl-${RESTY_OPENSSL_VERSION}.tar.gz \
@@ -169,7 +192,7 @@ RUN apk add --no-cache --virtual .build-deps \
     && make -j${RESTY_J} install_sw \
     && cd /tmp \
     && curl -fSL "https://github.com/PCRE2Project/pcre2/releases/download/pcre2-${RESTY_PCRE_VERSION}/pcre2-${RESTY_PCRE_VERSION}.tar.gz" -o pcre2-${RESTY_PCRE_VERSION}.tar.gz \
-    && echo "${RESTY_PCRE_SHA256}  pcre2-${RESTY_PCRE_VERSION}.tar.gz" | shasum -a 256 --check \
+    && echo "${RESTY_PCRE_SHA256}  pcre2-${RESTY_PCRE_VERSION}.tar.gz" | sha256sum -c - \
     && tar xzf pcre2-${RESTY_PCRE_VERSION}.tar.gz \
     && cd /tmp/pcre2-${RESTY_PCRE_VERSION} \
     && CFLAGS="-g -O3" ./configure \
@@ -182,7 +205,7 @@ RUN apk add --no-cache --virtual .build-deps \
     && curl -fSL "https://github.com/slact/nchan/archive/refs/tags/v${NCHAN_VERSION}.tar.gz" -o nchan.tar.gz \
     && tar xzf nchan.tar.gz \
     && mv nchan-${NCHAN_VERSION} nchan \
-    && curl -fSL https://openresty.org/download/openresty-${RESTY_VERSION}.tar.gz -o openresty-${RESTY_VERSION}.tar.gz \
+    && curl -fSL "https://openresty.org/download/openresty-${RESTY_VERSION}.tar.gz" -o openresty-${RESTY_VERSION}.tar.gz \
     && tar xzf openresty-${RESTY_VERSION}.tar.gz \
     && cd /tmp/openresty-${RESTY_VERSION} \
     && if [ -n "${RESTY_EVAL_POST_DOWNLOAD_PRE_CONFIGURE}" ]; then eval $(echo ${RESTY_EVAL_POST_DOWNLOAD_PRE_CONFIGURE}); fi \
@@ -205,10 +228,8 @@ RUN apk add --no-cache --virtual .build-deps \
         && find /usr/local/openresty/pcre2 -type f -perm -u+x -exec strip --strip-unneeded '{}' \; \
         && rm -Rf /usr/local/openresty/luajit/lib/*.a /usr/local/openresty/luajit/share/man \
         && find /usr/local/openresty/luajit -type f -perm -u+x -exec strip --strip-unneeded '{}' \; \
-        && find /usr/local/openresty/nginx -type f -perm -u+x -exec strip --strip-unneeded '{}' \; ; \ 
+        && find /usr/local/openresty/nginx -type f -perm -u+x -exec strip --strip-unneeded '{}' \; ; \
     fi \
-    && apk del .build-deps \
-    && mkdir -p /var/run/openresty \
     && ln -sf /dev/stdout /usr/local/openresty/nginx/logs/access.log \
     && ln -sf /dev/stderr /usr/local/openresty/nginx/logs/error.log
 
@@ -216,8 +237,13 @@ RUN apk add --no-cache --virtual .build-deps \
 ENV PATH=$PATH:/usr/local/openresty/luajit/bin:/usr/local/openresty/nginx/sbin:/usr/local/openresty/bin
 
 # ── Install Claude CLI ──
-RUN apk add --no-cache nodejs npm \
-    && npm install -g @anthropic-ai/claude-code
+RUN npm install -g --no-fund --no-audit @anthropic-ai/claude-code
+
+# ── Runtime user ──
+RUN groupadd --system claude \
+    && useradd --system --create-home --home-dir /home/claude --gid claude claude \
+    && mkdir -p /home/claude/.claude /app/projects /app/logs \
+    && chown -R claude:claude /home/claude /app
 
 # ── App files ──
 WORKDIR /app
@@ -225,11 +251,12 @@ COPY conf/nginx.conf /app/conf/nginx.conf
 COPY lua/           /app/lua/
 COPY html/          /app/html/
 
-RUN mkdir -p /app/projects /app/logs
+RUN mkdir -p /app/projects /app/logs \
+    && chown -R claude:claude /app/projects /app/logs
 
 EXPOSE 8080
 
-CMD ["openresty", "-p", "/app/", "-c", "conf/nginx.conf", "-g", "daemon off;"]
+CMD ["openresty", "-p", "/app/", "-c", "conf/nginx.conf"]
 
 # Use SIGQUIT instead of default SIGTERM to cleanly drain requests
 STOPSIGNAL SIGQUIT

@@ -4,20 +4,17 @@
 local _M = {}
 
 local utils = require "utils"
+local session_store = require "session_store"
 local pipe = require "ngx.pipe"
 
 local LOCK_TTL = 86400
 
-local function get_dict()
-    return ngx.shared.sessions
-end
-
-local function session_key(session_id)
-    return "session:" .. session_id
-end
-
 local function lock_key(session_id)
     return "session_lock:" .. session_id
+end
+
+local function get_lock_dict()
+    return ngx.shared.session_locks
 end
 
 local function build_env_vars()
@@ -151,18 +148,13 @@ local function extract_text_message(msg)
 end
 
 local function upsert_session(session_id, patch)
-    local dict = get_dict()
-    local raw = dict:get(session_key(session_id))
-    local info = raw and utils.json_decode(raw) or {}
+    local info, err = session_store.upsert(session_id, patch)
     if not info then
-        info = {}
+        ngx.log(ngx.ERR, "session store upsert failed for ", session_id,
+                ": ", err or "unknown")
+        return nil, err
     end
 
-    for k, v in pairs(patch) do
-        info[k] = v
-    end
-
-    dict:set(session_key(session_id), utils.json_encode(info))
     return info
 end
 
@@ -175,11 +167,11 @@ local function session_turn_mode(session_id)
 end
 
 local function acquire_lock(session_id)
-    return get_dict():add(lock_key(session_id), ngx.now(), LOCK_TTL)
+    return get_lock_dict():add(lock_key(session_id), ngx.now(), LOCK_TTL)
 end
 
 local function release_lock(session_id)
-    get_dict():delete(lock_key(session_id))
+    get_lock_dict():delete(lock_key(session_id))
 end
 
 local function publish_to_session(session_id, payload)
@@ -435,10 +427,9 @@ local function run_turn(session_id, body, project_dir)
 end
 
 function _M.spawn(session_id, body)
-    local dict = get_dict()
-    local raw = dict:get(session_key(session_id))
-    if not raw then
-        return nil, "session not found"
+    local info, err = session_store.get(session_id)
+    if not info then
+        return nil, err or "session not found"
     end
 
     if not is_turn_request(body) then
@@ -484,50 +475,60 @@ function _M.spawn(session_id, body)
 end
 
 function _M.list()
-    local dict = get_dict()
-    local keys = dict:get_keys(0)
-    local sessions = {}
-    for _, key in ipairs(keys) do
-        if string.match(key, "^session:") then
-            local raw = dict:get(key)
-            if raw then
-                local info = utils.json_decode(raw)
-                if info then
-                    info.locked = dict:get(lock_key(info.session_id or key:sub(9))) ~= nil
-                    table.insert(sessions, info)
-                end
-            end
-        end
+    local sessions, err = session_store.list()
+    if not sessions then
+        return nil, err
+    end
+    local dict = get_lock_dict()
+    for _, info in ipairs(sessions) do
+        info.locked = dict:get(lock_key(info.session_id)) ~= nil
     end
     return sessions
 end
 
 function _M.get(session_id)
-    local raw = get_dict():get(session_key(session_id))
-    if not raw then
-        return nil
-    end
-    local info = utils.json_decode(raw)
+    local info, err = session_store.get(session_id)
     if info then
-        info.locked = get_dict():get(lock_key(session_id)) ~= nil
+        info.locked = get_lock_dict():get(lock_key(session_id)) ~= nil
     end
-    return info
+    return info, err
 end
 
 function _M.delete(session_id)
-    local dict = get_dict()
-    local info = _M.get(session_id)
+    local info, err = _M.get(session_id)
     if not info then
-        return true
+        if err == "not found" or not err then
+            get_lock_dict():delete(lock_key(session_id))
+            return true
+        end
+        return nil, err
     end
 
     if info.locked or info.status == "running" then
         return nil, "session busy"
     end
 
-    dict:delete(session_key(session_id))
-    dict:delete(lock_key(session_id))
+    local ok, del_err = session_store.delete(session_id)
+    if not ok then
+        return nil, del_err
+    end
+    get_lock_dict():delete(lock_key(session_id))
     return true
+end
+
+function _M.create(session_id)
+    local info = {
+        session_id = session_id,
+        claude_initialized = false,
+        turn_count = 0,
+        status = "idle",
+        created_at = ngx.now()
+    }
+    local stored, err = session_store.create(info)
+    if not stored then
+        return nil, err
+    end
+    return stored
 end
 
 return _M
