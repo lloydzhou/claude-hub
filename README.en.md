@@ -19,9 +19,9 @@ flowchart LR
   subgraph OR[OpenResty server :8080]
     LUA[Lua router]
     NCHAN[Nchan module]
+    SHM[(ngx.shared.session_locks)]
   end
   REDIS[(Redis)]
-  SHM[(ngx.shared.session_locks)]
   CLAUDE[claude -p]
 
   UI -->|GET /api/sessions| LUA
