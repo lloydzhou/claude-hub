@@ -103,9 +103,22 @@ function SessionTui({ sessionId, baseUrl = '' }) {
   const client = useMemo(() => createRemoteSessionClient({ apiBase: baseUrl, sessionId }), [baseUrl, sessionId]);
   const [state, setState] = useState(client.getState());
   const [input, setInput] = useState('');
+  const [exitArmed, setExitArmed] = useState(false);
+  const exitTimer = React.useRef(null);
   const inputEnabled = !!process.stdin.isTTY && !!process.stdout.isTTY;
 
   useEffect(() => client.subscribe(setState), [client]);
+
+  useEffect(() => {
+    if (!exitArmed) return undefined;
+    exitTimer.current = setTimeout(() => setExitArmed(false), 1800);
+    return () => {
+      if (exitTimer.current) {
+        clearTimeout(exitTimer.current);
+        exitTimer.current = null;
+      }
+    };
+  }, [exitArmed]);
 
   useEffect(() => {
     client.ensureConnected().catch((err) => {
@@ -119,7 +132,7 @@ function SessionTui({ sessionId, baseUrl = '' }) {
   const messages = state.messages || [];
   const queue = state.queue || [];
   const summary = `session=${session.id}  status=${session.status || 'loading'}  connected=${state.connected ? 'yes' : 'no'}  busy=${state.busy ? 'yes' : 'no'}  queue=${queue.length}`;
-  const promptText = input.length ? input : 'Ask Claude...';
+  const promptText = input;
   const showCursor = !!inputEnabled;
   const columns = Math.max(process.stdout.columns || 80, 10);
   const rule = '─'.repeat(columns - 1);
@@ -131,7 +144,13 @@ function SessionTui({ sessionId, baseUrl = '' }) {
           value={input}
           setValue={setInput}
           onSubmit={(text) => client.sendTurn(text).catch(() => {})}
-          onExit={exit}
+          onExit={() => {
+            if (exitArmed) {
+              exit();
+              return;
+            }
+            setExitArmed(true);
+          }}
         />
       ) : null}
       <Box marginBottom={1}>
@@ -149,7 +168,9 @@ function SessionTui({ sessionId, baseUrl = '' }) {
           {showCursor ? <Text color="green">█</Text> : null}
         </Box>
         <Text dimColor>{rule}</Text>
-        <Text dimColor>accept edits on (shift+tab to cycle)</Text>
+        <Text dimColor>
+          {exitArmed ? 'Press Ctrl+C again to exit.' : 'accept edits on (shift+tab to cycle)'}
+        </Text>
       </Box>
       {!inputEnabled ? (
         <Text dimColor>
@@ -184,7 +205,9 @@ async function main() {
     return;
   }
 
-  render(<SessionTui sessionId={argv.sessionId} baseUrl={baseUrl} />);
+  render(<SessionTui sessionId={argv.sessionId} baseUrl={baseUrl} />, {
+    exitOnCtrlC: false,
+  });
 }
 
 if (import.meta.main) {
