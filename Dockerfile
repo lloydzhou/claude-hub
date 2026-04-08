@@ -277,6 +277,7 @@ RUN set -eux; \
     apt-get install -y --no-install-recommends \
         ca-certificates \
         curl \
+        git \
         libgd3 \
         libgeoip1 \
         libxslt1.1 \

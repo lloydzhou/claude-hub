@@ -108,23 +108,17 @@ local function build_attachment_prompt(attachments, text)
         return text
     end
 
-    local lines = {}
-    table.insert(lines, "You must read these local image files first with the Read tool.")
-    table.insert(lines, "Do not use analyze_image or any other server_tool_use for these files.")
-    table.insert(lines, "Read each file path directly as written below:")
+    local parts = {}
     for _, attachment in ipairs(attachments) do
         if attachment.server_path and attachment.server_path ~= "" then
-            table.insert(lines, "- " .. attachment.server_path)
+            table.insert(parts, "@" .. attachment.server_path)
         end
     end
-    table.insert(lines, "")
+    local file_refs = table.concat(parts, " ")
     if text ~= "" then
-        table.insert(lines, "Then answer the user's request:")
-        table.insert(lines, text)
-    else
-        table.insert(lines, "Then describe what you observe in the attached images.")
+        return file_refs .. "\n\n" .. text
     end
-    return table.concat(lines, "\n")
+    return file_refs
 end
 
 local function build_turn_prompt(body)
